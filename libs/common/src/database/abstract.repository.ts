@@ -1,18 +1,11 @@
-import {
-  Connection,
-  FilterQuery,
-  Model,
-  SaveOptions,
-  Types,
-  UpdateQuery,
-} from 'mongoose';
+import { FilterQuery, Model, SaveOptions, Types, UpdateQuery } from 'mongoose';
 import { AbstractDocument } from './abstract.schema';
 import { NotFoundException } from '@nestjs/common';
 
 export abstract class AbstractRepository<TDocument extends AbstractDocument> {
   constructor(
     protected readonly model: Model<TDocument>,
-    private readonly connection: Connection,
+    // private readonly connection: Connection,
   ) {}
 
   async create(
@@ -74,9 +67,9 @@ export abstract class AbstractRepository<TDocument extends AbstractDocument> {
     });
   }
 
-  async startTransaction() {
+  /* async startTransaction() {
     const session = await this.connection.startSession();
     session.startTransaction();
     return session;
-  }
+  } */
 }

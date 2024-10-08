@@ -10,9 +10,9 @@ export class BillingController {
     private readonly rmqService: RmqService,
   ) {}
 
-  @EventPattern('order_created')
-  async handleOrderCreated(@Payload() data: any, @Ctx() context: RmqContext) {
-    this.billingService.bill(data);
-    this.rmqService.ack(context);
-  }
+  // @EventPattern('order_created')
+  // async handleOrderCreated(@Payload() data: any, @Ctx() context: RmqContext) {
+  //   this.billingService.bill(data);
+  //   this.rmqService.ack(context);
+  // }
 }

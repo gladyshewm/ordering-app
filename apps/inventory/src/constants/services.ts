@@ -1,0 +1,2 @@
+export const INVENTORY_SERVICE = 'INVENTORY';
+export const ORDERS_SERVICE = 'ORDERS';

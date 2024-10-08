@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { AbstractDocument } from '@app/common';
 
-export enum OrderStatus {
+enum OrderStatus {
   CREATED = 'created',
   CONFIRMED = 'confirmed',
   PAID = 'paid',

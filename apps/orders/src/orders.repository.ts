@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AbstractRepository } from '@app/common';
 import { Order } from './schemas/order.schema';
-import { InjectConnection, InjectModel } from '@nestjs/mongoose';
-import { ClientSession, Connection, Model } from 'mongoose';
+import { InjectModel } from '@nestjs/mongoose';
+import { ClientSession, Model } from 'mongoose';
 
 @Injectable()
 export class OrdersRepository extends AbstractRepository<Order> {
@@ -10,9 +10,9 @@ export class OrdersRepository extends AbstractRepository<Order> {
 
   constructor(
     @InjectModel(Order.name) orderModel: Model<Order>,
-    @InjectConnection() connection: Connection,
+    // @InjectConnection() connection: Connection,
   ) {
-    super(orderModel, connection);
+    super(orderModel);
   }
 
   async updateOrder(order: Order, session?: ClientSession): Promise<Order> {

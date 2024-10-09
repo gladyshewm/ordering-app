@@ -11,6 +11,7 @@ import {
   BILLING_SERVICE,
   INVENTORY_SERVICE,
   ORDERS_SERVICE,
+  SHIPPING_SERVICE,
 } from './constants/services';
 
 @Module({
@@ -24,6 +25,7 @@ import {
         RABBIT_MQ_ORDERS_QUEUE: Joi.string().required(),
         RABBIT_MQ_BILLING_QUEUE: Joi.string().required(),
         RABBIT_MQ_INVENTORY_QUEUE: Joi.string().required(),
+        RABBIT_MQ_SHIPPING_QUEUE: Joi.string().required(),
       }),
       envFilePath: './apps/orders/.env',
     }),
@@ -32,6 +34,7 @@ import {
     RmqModule.register({ name: ORDERS_SERVICE }),
     RmqModule.register({ name: BILLING_SERVICE }),
     RmqModule.register({ name: INVENTORY_SERVICE }),
+    RmqModule.register({ name: SHIPPING_SERVICE }),
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrdersRepository],

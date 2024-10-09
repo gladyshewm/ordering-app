@@ -59,6 +59,25 @@ services:
         - path: ./apps/inventory
           target: /usr/src/app/apps/inventory
           action: sync
+  
+  shipping:
+    build:
+      context: .
+      dockerfile: ./apps/shipping/Dockerfile
+      target: development
+    command: npm run start:dev shipping
+    env_file:
+      - ./apps/shipping/.env
+    depends_on:
+      - mongo
+      - rabbitmq
+    volumes:
+      - /usr/src/app/node_modules
+    develop:
+      watch:
+        - path: ./apps/shipping
+          target: /usr/src/app/apps/shipping
+          action: sync
 
   rabbitmq:
     image: rabbitmq

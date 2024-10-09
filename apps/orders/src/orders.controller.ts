@@ -22,7 +22,7 @@ import {
 } from '@nestjs/microservices';
 import { RmqService } from '@app/common';
 import { lastValueFrom } from 'rxjs';
-import { BILLING_SERVICE } from './constants/services';
+import { BILLING_SERVICE, SHIPPING_SERVICE } from './constants/services';
 
 @Controller('orders')
 export class OrdersController {
@@ -32,6 +32,7 @@ export class OrdersController {
     private readonly ordersService: OrdersService,
     private readonly rmqService: RmqService,
     @Inject(BILLING_SERVICE) private billingClient: ClientProxy,
+    @Inject(SHIPPING_SERVICE) private shippingClient: ClientProxy,
   ) {}
 
   @Post()
@@ -116,6 +117,43 @@ export class OrdersController {
       await this.ordersService.updateOrderStatus(data._id, OrderStatus.PAID);
 
       this.logger.log(`Successfully updated order ${data._id} status to PAID`);
+
+      await lastValueFrom(this.shippingClient.emit('order_paid', data))
+        .then(() => {
+          this.logger.log(
+            `Successfully emitted order_paid event for order ${data._id}`,
+          );
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Failed to emit order_paid event for order ${data._id}`,
+            error,
+          );
+          throw error;
+        });
+
+      this.rmqService.ack(context);
+    } catch (error) {
+      this.logger.error(`Failed to update order ${data._id} status`, error);
+      this.rmqService.nack(context);
+    }
+  }
+
+  @EventPattern('shipping_processing')
+  async handleShippingProcessing(
+    @Payload() data: OrderDTO,
+    @Ctx() context: RmqContext,
+  ) {
+    this.logger.log(`Received shipping_processing event for order ${data._id}`);
+    try {
+      await this.ordersService.updateOrderStatus(
+        data._id,
+        OrderStatus.PROCESSING,
+      );
+
+      this.logger.log(
+        `Successfully updated order ${data._id} status to PROCESSING`,
+      );
 
       this.rmqService.ack(context);
     } catch (error) {

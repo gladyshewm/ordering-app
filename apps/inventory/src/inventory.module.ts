@@ -4,7 +4,7 @@ import { InventoryService } from './inventory.service';
 import { RmqModule } from '@app/common';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
-import { ORDERS_SERVICE } from './constants/services';
+import { INVENTORY_SERVICE, ORDERS_SERVICE } from './constants/services';
 
 @Module({
   imports: [
@@ -16,7 +16,7 @@ import { ORDERS_SERVICE } from './constants/services';
         RABBIT_MQ_ORDERS_QUEUE: Joi.string().required(),
       }),
     }),
-    RmqModule,
+    RmqModule.register({ name: INVENTORY_SERVICE }),
     RmqModule.register({ name: ORDERS_SERVICE }),
   ],
   controllers: [InventoryController],

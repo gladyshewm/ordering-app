@@ -7,7 +7,11 @@ import { DatabaseModule, RmqModule } from '@app/common';
 import { OrdersRepository } from './orders.repository';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Order, OrderSchema } from './schemas/order.schema';
-import { BILLING_SERVICE, INVENTORY_SERVICE } from './constants/services';
+import {
+  BILLING_SERVICE,
+  INVENTORY_SERVICE,
+  ORDERS_SERVICE,
+} from './constants/services';
 
 @Module({
   imports: [
@@ -18,12 +22,14 @@ import { BILLING_SERVICE, INVENTORY_SERVICE } from './constants/services';
         PORT: Joi.number().required().default(3000),
         RABBIT_MQ_URI: Joi.string().required(),
         RABBIT_MQ_ORDERS_QUEUE: Joi.string().required(),
+        RABBIT_MQ_BILLING_QUEUE: Joi.string().required(),
+        RABBIT_MQ_INVENTORY_QUEUE: Joi.string().required(),
       }),
       envFilePath: './apps/orders/.env',
     }),
     DatabaseModule,
     MongooseModule.forFeature([{ name: Order.name, schema: OrderSchema }]),
-    RmqModule,
+    RmqModule.register({ name: ORDERS_SERVICE }),
     RmqModule.register({ name: BILLING_SERVICE }),
     RmqModule.register({ name: INVENTORY_SERVICE }),
   ],

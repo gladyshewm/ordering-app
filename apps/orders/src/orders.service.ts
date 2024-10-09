@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrdersRepository } from './orders.repository';
-import { BILLING_SERVICE, INVENTORY_SERVICE } from './constants/services';
+import { INVENTORY_SERVICE } from './constants/services';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { OrderDTO, OrderStatus } from './dto/order.dto';
@@ -19,7 +19,6 @@ export class OrdersService {
 
   constructor(
     private readonly ordersRepository: OrdersRepository,
-    @Inject(BILLING_SERVICE) private billingClient: ClientProxy,
     @Inject(INVENTORY_SERVICE) private inventoryClient: ClientProxy,
   ) {}
 

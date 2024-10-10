@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: ./apps/orders/Dockerfile
       target: development
+    container_name: orders
     command: npm run start:dev orders
     env_file:
       - ./apps/orders/.env
@@ -27,6 +28,7 @@ services:
       context: .
       dockerfile: ./apps/billing/Dockerfile
       target: development
+    container_name: billing
     command: npm run start:dev billing
     env_file:
       - ./apps/billing/.env
@@ -46,6 +48,7 @@ services:
       context: .
       dockerfile: ./apps/inventory/Dockerfile
       target: development
+    container_name: inventory
     command: npm run start:dev inventory
     env_file:
       - ./apps/inventory/.env
@@ -59,12 +62,13 @@ services:
         - path: ./apps/inventory
           target: /usr/src/app/apps/inventory
           action: sync
-  
+
   shipping:
     build:
       context: .
       dockerfile: ./apps/shipping/Dockerfile
       target: development
+    container_name: shipping
     command: npm run start:dev shipping
     env_file:
       - ./apps/shipping/.env
@@ -80,12 +84,21 @@ services:
           action: sync
 
   rabbitmq:
-    image: rabbitmq
+    image: rabbitmq:4-management-alpine
+    container_name: 'rabbitmq'
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
     ports:
       - '5672:5672'
+      - '15672:15672'
+    networks:
+      - default
+      - rabbitmq_network
 
   mongo:
     image: mongo
+    container_name: 'mongo'
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
@@ -94,6 +107,8 @@ services:
       - 'mongodb_data:/data/db'
     ports:
       - '27017:27017'
+    networks:
+      - default
 
   # mongodb replica set
   # mongodb-primary:
@@ -133,3 +148,7 @@ services:
 volumes:
   mongodb_data:
     driver: local
+
+networks:
+  rabbitmq_network:
+    driver: bridge

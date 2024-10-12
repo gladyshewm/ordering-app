@@ -1,4 +1,4 @@
-import { Controller, Inject, Logger } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Logger, Post } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { RmqService } from '@app/common';
 import {
@@ -11,8 +11,9 @@ import {
 import { ORDERS_SERVICE } from './constants/services';
 import { lastValueFrom } from 'rxjs';
 import { CreatedOrderDTO } from './dto/order-created.dto';
+import { AddProductDTO, ProductDTO } from './dto/add-product.dto';
 
-@Controller()
+@Controller('inventory')
 export class InventoryController {
   private readonly logger = new Logger(InventoryController.name);
 
@@ -21,6 +22,16 @@ export class InventoryController {
     private readonly rmqService: RmqService,
     @Inject(ORDERS_SERVICE) private readonly ordersClient: ClientProxy,
   ) {}
+
+  @Get()
+  async getProducts(): Promise<ProductDTO[]> {
+    return this.inventoryService.getProducts();
+  }
+
+  @Post()
+  async addProducts(@Body() product: AddProductDTO): Promise<ProductDTO> {
+    return this.inventoryService.addProducts(product);
+  }
 
   @EventPattern('order_created')
   async handleOrderCreated(
@@ -52,7 +63,7 @@ export class InventoryController {
         this.logger.error('Failed to emit inventory_unavailable event', error);
       });
 
-      this.rmqService.nack(context);
+      this.rmqService.ack(context);
     }
   }
 }

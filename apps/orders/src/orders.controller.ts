@@ -9,10 +9,14 @@ import {
   Put,
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
-import { CreateOrderDto } from './dto/create-order.dto';
 import { StatusHistory } from './schemas/order.schema';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
-import { OrderDTO, OrderStatus } from './dto/order.dto';
+import {
+  CreatedOrderDTO,
+  CreateOrderDTO,
+  OrderDTO,
+  OrderStatus,
+} from './dto/order.dto';
 import {
   ClientProxy,
   Ctx,
@@ -36,7 +40,7 @@ export class OrdersController {
   ) {}
 
   @Post()
-  async createOrder(@Body() request: CreateOrderDto): Promise<OrderDTO> {
+  async createOrder(@Body() request: CreateOrderDTO): Promise<CreatedOrderDTO> {
     return this.ordersService.createOrder(request);
   }
 
@@ -72,37 +76,72 @@ export class OrdersController {
 
   @EventPattern('inventory_reserved')
   async handleInventoryReserved(
-    @Payload() data: OrderDTO,
+    @Payload() createdOrder: CreatedOrderDTO,
     @Ctx() context: RmqContext,
   ) {
-    this.logger.log(`Received inventory_reserved event for order ${data._id}`);
+    this.logger.log(
+      `Received inventory_reserved event for order ${createdOrder._id}`,
+    );
     try {
       await this.ordersService.updateOrderStatus(
-        data._id,
+        createdOrder._id,
         OrderStatus.CONFIRMED,
       );
 
       this.logger.log(
-        `Successfully updated order ${data._id} status to CONFIRMED`,
+        `Successfully updated order ${createdOrder._id} status to CONFIRMED`,
       );
 
-      await lastValueFrom(this.billingClient.emit('order_confirmed', data))
+      /* await lastValueFrom(
+        this.billingClient.emit('order_confirmed', createdOrder),
+      )
         .then(() => {
           this.logger.log(
-            `Successfully emitted order_confirmed event for order ${data._id}`,
+            `Successfully emitted order_confirmed event for order ${createdOrder._id}`,
           );
         })
         .catch((error) => {
           this.logger.error(
-            `Failed to emit order_confirmed event for order ${data._id}`,
+            `Failed to emit order_confirmed event for order ${createdOrder._id}`,
             error,
           );
           throw error;
-        });
+        }); */
 
       this.rmqService.ack(context);
     } catch (error) {
-      this.logger.error(`Failed to update order ${data._id} status`, error);
+      this.logger.error(
+        `Failed to update order ${createdOrder._id} status`,
+        error,
+      );
+      this.rmqService.nack(context);
+    }
+  }
+
+  @EventPattern('inventory_unavailable')
+  async handleInventoryUnavailable(
+    @Payload() createdOrder: CreatedOrderDTO,
+    @Ctx() context: RmqContext,
+  ) {
+    this.logger.log(
+      `Received inventory_unavailable event for order ${createdOrder._id}`,
+    );
+    try {
+      await this.ordersService.updateOrderStatus(
+        createdOrder._id,
+        OrderStatus.CANCELLED,
+      );
+
+      this.logger.log(
+        `Successfully updated order ${createdOrder._id} status to CANCELLED`,
+      );
+
+      this.rmqService.ack(context);
+    } catch (error) {
+      this.logger.error(
+        `Failed to update order ${createdOrder._id} status`,
+        error,
+      );
       this.rmqService.nack(context);
     }
   }

@@ -5,12 +5,16 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateOrderDto } from './dto/create-order.dto';
 import { OrdersRepository } from './orders.repository';
 import { INVENTORY_SERVICE } from './constants/services';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
-import { OrderDTO, OrderStatus } from './dto/order.dto';
+import {
+  CreatedOrderDTO,
+  CreateOrderDTO,
+  OrderDTO,
+  OrderStatus,
+} from './dto/order.dto';
 import { Types } from 'mongoose';
 
 @Injectable()
@@ -22,15 +26,22 @@ export class OrdersService {
     @Inject(INVENTORY_SERVICE) private inventoryClient: ClientProxy,
   ) {}
 
-  async createOrder(request: CreateOrderDto): Promise<OrderDTO> {
-    const order = await this.ordersRepository.create(request);
-    const createdOrder: OrderDTO = {
+  async createOrder(request: CreateOrderDTO): Promise<CreatedOrderDTO> {
+    const totalPrice = request.items.reduce(
+      (acc, item) => acc + item.price * item.quantity,
+      0,
+    );
+    const order = await this.ordersRepository.create({
+      ...request,
+      totalPrice,
+    });
+
+    const createdOrder: CreatedOrderDTO = {
       _id: String(order._id),
-      name: order.name,
-      price: order.price,
+      items: order.items,
+      address: order.address,
       phoneNumber: order.phoneNumber,
-      status: order.status,
-      statusHistory: order.statusHistory,
+      totalPrice: order.totalPrice,
     };
 
     await lastValueFrom(
@@ -50,9 +61,10 @@ export class OrdersService {
     const orders = await this.ordersRepository.find({});
     return orders.map((order) => ({
       _id: String(order._id),
-      name: order.name,
-      price: order.price,
+      items: order.items,
+      address: order.address,
       phoneNumber: order.phoneNumber,
+      totalPrice: order.totalPrice,
       status: order.status,
       statusHistory: order.statusHistory,
     }));
@@ -62,9 +74,10 @@ export class OrdersService {
     const order = await this.ordersRepository.findOne({ _id: id });
     return {
       _id: String(order._id),
-      name: order.name,
-      price: order.price,
+      items: order.items,
+      address: order.address,
       phoneNumber: order.phoneNumber,
+      totalPrice: order.totalPrice,
       status: order.status,
       statusHistory: order.statusHistory,
     };
@@ -101,9 +114,10 @@ export class OrdersService {
 
     return {
       _id: String(updatedOrder._id),
-      name: updatedOrder.name,
-      price: updatedOrder.price,
+      items: updatedOrder.items,
+      address: updatedOrder.address,
       phoneNumber: updatedOrder.phoneNumber,
+      totalPrice: updatedOrder.totalPrice,
       status: updatedOrder.status,
       statusHistory: updatedOrder.statusHistory,
     } as OrderDTO;

@@ -23,6 +23,28 @@ services:
           target: /usr/src/app/apps/orders
           action: sync
 
+  inventory:
+    build:
+      context: .
+      dockerfile: ./apps/inventory/Dockerfile
+      target: development
+    container_name: inventory
+    command: npm run start:dev inventory
+    env_file:
+      - ./apps/inventory/.env
+    depends_on:
+      - mongo
+      - rabbitmq
+    volumes:
+      - /usr/src/app/node_modules
+    ports:
+      - '3001:3001'
+    develop:
+      watch:
+        - path: ./apps/inventory
+          target: /usr/src/app/apps/inventory
+          action: sync
+
   billing:
     build:
       context: .
@@ -41,26 +63,6 @@ services:
       watch:
         - path: ./apps/billing
           target: /usr/src/app/apps/billing
-          action: sync
-
-  inventory:
-    build:
-      context: .
-      dockerfile: ./apps/inventory/Dockerfile
-      target: development
-    container_name: inventory
-    command: npm run start:dev inventory
-    env_file:
-      - ./apps/inventory/.env
-    depends_on:
-      - mongo
-      - rabbitmq
-    volumes:
-      - /usr/src/app/node_modules
-    develop:
-      watch:
-        - path: ./apps/inventory
-          target: /usr/src/app/apps/inventory
           action: sync
 
   shipping:

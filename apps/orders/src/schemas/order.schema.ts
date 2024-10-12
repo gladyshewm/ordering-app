@@ -11,7 +11,7 @@ enum OrderStatus {
   CANCELLED = 'cancelled',
 }
 
-@Schema({ versionKey: false, timestamps: true })
+@Schema()
 export class StatusHistory {
   @Prop({ required: true, enum: OrderStatus })
   status: OrderStatus;
@@ -23,16 +23,31 @@ export class StatusHistory {
   comment?: string;
 }
 
-@Schema({ versionKey: false, timestamps: true })
-export class Order extends AbstractDocument {
+@Schema()
+export class OrderItem {
   @Prop({ required: true })
-  name: string;
+  sku: string;
+
+  @Prop({ required: true })
+  quantity: number;
 
   @Prop({ required: true })
   price: number;
+}
+
+@Schema({ versionKey: false, timestamps: true })
+export class Order extends AbstractDocument {
+  @Prop({ type: [OrderItem], required: true })
+  items: OrderItem[];
+
+  @Prop({ required: true })
+  address: string;
 
   @Prop({ required: true })
   phoneNumber: string;
+
+  @Prop({ required: true })
+  totalPrice: number;
 
   @Prop({ required: true, enum: OrderStatus, default: OrderStatus.CREATED })
   status: OrderStatus;

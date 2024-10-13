@@ -2,59 +2,54 @@ import {
   Body,
   Controller,
   Get,
-  Inject,
   Logger,
   Param,
   Post,
   Put,
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
-import { StatusHistory } from './schemas/order.schema';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import {
   CreatedOrderDTO,
   CreateOrderDTO,
   OrderDTO,
   OrderStatus,
+  StatusHistoryDTO,
 } from './dto/order.dto';
-import {
-  ClientProxy,
-  Ctx,
-  EventPattern,
-  Payload,
-  RmqContext,
-} from '@nestjs/microservices';
-import { RmqService } from '@app/common';
-import { lastValueFrom } from 'rxjs';
-import { BILLING_SERVICE, SHIPPING_SERVICE } from './constants/services';
+import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
+import { ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOrderResponse } from './decorators/swagger/api-order.decorator';
+import { ApiCreatedOrderResponse } from './decorators/swagger/api-created-order.decorator';
 
 @Controller('orders')
+@ApiTags('orders')
 export class OrdersController {
   private readonly logger = new Logger(OrdersController.name);
 
-  constructor(
-    private readonly ordersService: OrdersService,
-    private readonly rmqService: RmqService,
-    @Inject(BILLING_SERVICE) private billingClient: ClientProxy,
-    @Inject(SHIPPING_SERVICE) private shippingClient: ClientProxy,
-  ) {}
+  constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  async createOrder(@Body() request: CreateOrderDTO): Promise<CreatedOrderDTO> {
-    return this.ordersService.createOrder(request);
+  @ApiCreatedOrderResponse('Create an order')
+  @ApiBody({ type: CreateOrderDTO })
+  async createOrder(@Body() order: CreateOrderDTO): Promise<CreatedOrderDTO> {
+    return this.ordersService.createOrder(order);
   }
 
   @Get()
+  @ApiOrderResponse('Get all orders', true)
   async getOrders(): Promise<OrderDTO[]> {
     return this.ordersService.getOrders();
   }
 
   @Get(':id')
+  @ApiOrderResponse('Get an order')
   async getOrder(@Param('id') id: string): Promise<OrderDTO> {
     return this.ordersService.getOrder(id);
   }
 
   @Put(':id/status')
+  @ApiOrderResponse('Update an order status')
+  @ApiBody({ type: UpdateOrderStatusDto })
   async updateOrderStatus(
     @Param('id') id: string,
     @Body() updateStatusDto: UpdateOrderStatusDto,
@@ -67,9 +62,10 @@ export class OrdersController {
   }
 
   @Get(':id/history')
+  @ApiOkResponse({ type: [StatusHistoryDTO], description: 'Get order history' })
   async getOrderStatusHistory(
     @Param('id') id: string,
-  ): Promise<StatusHistory[]> {
+  ): Promise<StatusHistoryDTO[]> {
     const order = await this.ordersService.getOrder(id);
     return order.statusHistory;
   }
@@ -82,40 +78,11 @@ export class OrdersController {
     this.logger.log(
       `Received inventory_reserved event for order ${createdOrder._id}`,
     );
-    try {
-      await this.ordersService.updateOrderStatus(
-        createdOrder._id,
-        OrderStatus.CONFIRMED,
-      );
-
-      this.logger.log(
-        `Successfully updated order ${createdOrder._id} status to CONFIRMED`,
-      );
-
-      /* await lastValueFrom(
-        this.billingClient.emit('order_confirmed', createdOrder),
-      )
-        .then(() => {
-          this.logger.log(
-            `Successfully emitted order_confirmed event for order ${createdOrder._id}`,
-          );
-        })
-        .catch((error) => {
-          this.logger.error(
-            `Failed to emit order_confirmed event for order ${createdOrder._id}`,
-            error,
-          );
-          throw error;
-        }); */
-
-      this.rmqService.ack(context);
-    } catch (error) {
-      this.logger.error(
-        `Failed to update order ${createdOrder._id} status`,
-        error,
-      );
-      this.rmqService.nack(context);
-    }
+    await this.ordersService.handleInventoryReserved(
+      createdOrder._id,
+      OrderStatus.CONFIRMED,
+      context,
+    );
   }
 
   @EventPattern('inventory_unavailable')
@@ -126,78 +93,38 @@ export class OrdersController {
     this.logger.log(
       `Received inventory_unavailable event for order ${createdOrder._id}`,
     );
-    try {
-      await this.ordersService.updateOrderStatus(
-        createdOrder._id,
-        OrderStatus.CANCELLED,
-      );
-
-      this.logger.log(
-        `Successfully updated order ${createdOrder._id} status to CANCELLED`,
-      );
-
-      this.rmqService.ack(context);
-    } catch (error) {
-      this.logger.error(
-        `Failed to update order ${createdOrder._id} status`,
-        error,
-      );
-      this.rmqService.nack(context);
-    }
+    await this.ordersService.handleInventoryUnavailable(
+      createdOrder._id,
+      OrderStatus.CANCELLED,
+      context,
+    );
   }
 
   @EventPattern('payment_successful')
   async handlePaymentSuccessful(
-    @Payload() data: OrderDTO,
+    @Payload() order: OrderDTO,
     @Ctx() context: RmqContext,
   ) {
-    this.logger.log(`Received payment_successful event for order ${data._id}`);
-    try {
-      await this.ordersService.updateOrderStatus(data._id, OrderStatus.PAID);
-
-      this.logger.log(`Successfully updated order ${data._id} status to PAID`);
-
-      await lastValueFrom(this.shippingClient.emit('order_paid', data))
-        .then(() => {
-          this.logger.log(
-            `Successfully emitted order_paid event for order ${data._id}`,
-          );
-        })
-        .catch((error) => {
-          this.logger.error(
-            `Failed to emit order_paid event for order ${data._id}`,
-            error,
-          );
-          throw error;
-        });
-
-      this.rmqService.ack(context);
-    } catch (error) {
-      this.logger.error(`Failed to update order ${data._id} status`, error);
-      this.rmqService.nack(context);
-    }
+    this.logger.log(`Received payment_successful event for order ${order._id}`);
+    await this.ordersService.handlePaymentSuccessful(
+      order._id,
+      OrderStatus.PAID,
+      context,
+    );
   }
 
   @EventPattern('shipping_processing')
   async handleShippingProcessing(
-    @Payload() data: OrderDTO,
+    @Payload() order: OrderDTO,
     @Ctx() context: RmqContext,
   ) {
-    this.logger.log(`Received shipping_processing event for order ${data._id}`);
-    try {
-      await this.ordersService.updateOrderStatus(
-        data._id,
-        OrderStatus.PROCESSING,
-      );
-
-      this.logger.log(
-        `Successfully updated order ${data._id} status to PROCESSING`,
-      );
-
-      this.rmqService.ack(context);
-    } catch (error) {
-      this.logger.error(`Failed to update order ${data._id} status`, error);
-      this.rmqService.nack(context);
-    }
+    this.logger.log(
+      `Received shipping_processing event for order ${order._id}`,
+    );
+    await this.ordersService.handleShippingProcessing(
+      order._id,
+      OrderStatus.PROCESSING,
+      context,
+    );
   }
 }

@@ -6,8 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { OrdersRepository } from './orders.repository';
-import { INVENTORY_SERVICE } from './constants/services';
-import { ClientProxy } from '@nestjs/microservices';
+import {
+  BILLING_SERVICE,
+  INVENTORY_SERVICE,
+  SHIPPING_SERVICE,
+} from './constants/services';
+import { ClientProxy, RmqContext } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import {
   CreatedOrderDTO,
@@ -16,6 +20,7 @@ import {
   OrderStatus,
 } from './dto/order.dto';
 import { Types } from 'mongoose';
+import { RmqService } from '@app/common';
 
 @Injectable()
 export class OrdersService {
@@ -23,7 +28,10 @@ export class OrdersService {
 
   constructor(
     private readonly ordersRepository: OrdersRepository,
+    private readonly rmqService: RmqService,
     @Inject(INVENTORY_SERVICE) private inventoryClient: ClientProxy,
+    @Inject(BILLING_SERVICE) private billingClient: ClientProxy,
+    @Inject(SHIPPING_SERVICE) private shippingClient: ClientProxy,
   ) {}
 
   async createOrder(request: CreateOrderDTO): Promise<CreatedOrderDTO> {
@@ -138,5 +146,109 @@ export class OrdersService {
     };
 
     return allowedTransitions[currentStatus].includes(newStatus) ?? false;
+  }
+
+  async handleInventoryReserved(
+    orderId: string,
+    newStatus: OrderStatus,
+    context: RmqContext,
+  ) {
+    try {
+      await this.updateOrderStatus(orderId, newStatus);
+
+      this.logger.log(
+        `Successfully updated order ${orderId} status to ${newStatus}`,
+      );
+
+      /* await lastValueFrom(
+        this.billingClient.emit('order_confirmed', createdOrder),
+      )
+        .then(() => {
+          this.logger.log(
+            `Successfully emitted order_confirmed event for order ${createdOrder._id}`,
+          );
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Failed to emit order_confirmed event for order ${createdOrder._id}`,
+            error,
+          );
+          throw error;
+        }); */
+
+      this.rmqService.ack(context);
+    } catch (error) {
+      this.logger.error(`Failed to update order ${orderId} status`, error);
+      this.rmqService.nack(context);
+    }
+  }
+
+  async handleInventoryUnavailable(
+    orderId: string,
+    newStatus: OrderStatus,
+    context: RmqContext,
+  ) {
+    try {
+      await this.updateOrderStatus(orderId, newStatus);
+
+      this.logger.log(
+        `Successfully updated order ${orderId} status to CANCELLED`,
+      );
+
+      this.rmqService.ack(context);
+    } catch (error) {
+      this.logger.error(`Failed to update order ${orderId} status`, error);
+      this.rmqService.nack(context);
+    }
+  }
+
+  async handlePaymentSuccessful(
+    orderId: string,
+    newStatus: OrderStatus,
+    context: RmqContext,
+  ) {
+    try {
+      await this.updateOrderStatus(orderId, newStatus);
+
+      this.logger.log(`Successfully updated order ${orderId} status to PAID`);
+
+      await lastValueFrom(this.shippingClient.emit('order_paid', orderId))
+        .then(() => {
+          this.logger.log(
+            `Successfully emitted order_paid event for order ${orderId}`,
+          );
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Failed to emit order_paid event for order ${orderId}`,
+            error,
+          );
+          throw error;
+        });
+
+      this.rmqService.ack(context);
+    } catch (error) {
+      this.logger.error(`Failed to update order ${orderId} status`, error);
+      this.rmqService.nack(context);
+    }
+  }
+
+  async handleShippingProcessing(
+    orderId: string,
+    newStatus: OrderStatus,
+    context: RmqContext,
+  ) {
+    try {
+      await this.updateOrderStatus(orderId, newStatus);
+
+      this.logger.log(
+        `Successfully updated order ${orderId} status to PROCESSING`,
+      );
+
+      this.rmqService.ack(context);
+    } catch (error) {
+      this.logger.error(`Failed to update order ${orderId} status`, error);
+      this.rmqService.nack(context);
+    }
   }
 }

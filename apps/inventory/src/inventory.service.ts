@@ -1,8 +1,16 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreatedOrderDTO } from './dto/order-created.dto';
 import { ProductRepository } from './product.repository';
 import { ReservationRepository } from './reservation.repository';
-import { AddProductDTO, ProductDTO } from './dto/add-product.dto';
+import {
+  AddProductDTO,
+  ProductDTO,
+  ReservationDTO,
+} from './dto/add-product.dto';
+import { lastValueFrom } from 'rxjs';
+import { RmqService } from '@app/common';
+import { ORDERS_SERVICE } from './constants/services';
+import { ClientProxy, RmqContext } from '@nestjs/microservices';
 
 @Injectable()
 export class InventoryService {
@@ -11,6 +19,8 @@ export class InventoryService {
   constructor(
     private readonly productRepository: ProductRepository,
     private readonly reservationRepository: ReservationRepository,
+    private readonly rmqService: RmqService,
+    @Inject(ORDERS_SERVICE) private readonly ordersClient: ClientProxy,
   ) {}
 
   async addProducts(products: AddProductDTO): Promise<ProductDTO> {
@@ -21,7 +31,14 @@ export class InventoryService {
     return this.productRepository.findAndPopulate({});
   }
 
-  async reserveItems(createdOrder: CreatedOrderDTO): Promise<void> {
+  async getReservations(): Promise<ReservationDTO[]> {
+    return this.reservationRepository.find({});
+  }
+
+  async reserveItems(
+    createdOrder: CreatedOrderDTO,
+    context: RmqContext,
+  ): Promise<void> {
     this.logger.log(`Reserving items for order ${createdOrder._id}...`);
     try {
       for (const item of createdOrder.items) {
@@ -56,13 +73,34 @@ export class InventoryService {
 
         product.quantity -= item.quantity;
         product.reservations.push(reservation._id);
+
+        await this.productRepository.upsert({ _id: product._id }, product);
+
+        await lastValueFrom(
+          this.ordersClient.emit('inventory_reserved', createdOrder),
+        )
+          .then(() => {
+            this.logger.log('Successfully emitted inventory_reserved event');
+          })
+          .catch((error) => {
+            this.logger.error('Failed to emit inventory_reserved event', error);
+          });
+
+        this.rmqService.ack(context);
       }
     } catch (error) {
       this.logger.error(
         `Failed to reserve items for order ${createdOrder._id}`,
         error,
       );
-      throw new Error('Failed to reserve items');
+
+      await lastValueFrom(
+        this.ordersClient.emit('inventory_unavailable', createdOrder),
+      ).catch((error) => {
+        this.logger.error('Failed to emit inventory_unavailable event', error);
+      });
+
+      this.rmqService.ack(context);
     }
   }
 }

@@ -1,36 +1,42 @@
-import { Body, Controller, Get, Inject, Logger, Post } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Post } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
-import { RmqService } from '@app/common';
-import {
-  ClientProxy,
-  Ctx,
-  EventPattern,
-  Payload,
-  RmqContext,
-} from '@nestjs/microservices';
-import { ORDERS_SERVICE } from './constants/services';
-import { lastValueFrom } from 'rxjs';
+import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
 import { CreatedOrderDTO } from './dto/order-created.dto';
-import { AddProductDTO, ProductDTO } from './dto/add-product.dto';
+import {
+  AddProductDTO,
+  ProductDTO,
+  ReservationDTO,
+} from './dto/add-product.dto';
+import { ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiProductResponse } from './decorators/swagger/api-product.decorator';
 
 @Controller('inventory')
+@ApiTags('inventory')
 export class InventoryController {
   private readonly logger = new Logger(InventoryController.name);
 
-  constructor(
-    private readonly inventoryService: InventoryService,
-    private readonly rmqService: RmqService,
-    @Inject(ORDERS_SERVICE) private readonly ordersClient: ClientProxy,
-  ) {}
+  constructor(private readonly inventoryService: InventoryService) {}
 
   @Get()
+  @ApiProductResponse(ReservationDTO, 'Get all products from inventory')
   async getProducts(): Promise<ProductDTO[]> {
     return this.inventoryService.getProducts();
   }
 
   @Post()
+  @ApiProductResponse(ReservationDTO, 'Add product to inventory')
+  @ApiBody({ type: AddProductDTO })
   async addProducts(@Body() product: AddProductDTO): Promise<ProductDTO> {
     return this.inventoryService.addProducts(product);
+  }
+
+  @Get('/reservations')
+  @ApiOkResponse({
+    type: [ReservationDTO],
+    description: 'Get all reservations',
+  })
+  async getReservations(): Promise<ReservationDTO[]> {
+    return this.inventoryService.getReservations();
   }
 
   @EventPattern('order_created')
@@ -39,31 +45,6 @@ export class InventoryController {
     @Ctx() context: RmqContext,
   ) {
     this.logger.log('Received order_created event');
-
-    try {
-      await this.inventoryService.reserveItems(createdOrder);
-
-      await lastValueFrom(
-        this.ordersClient.emit('inventory_reserved', createdOrder),
-      )
-        .then(() => {
-          this.logger.log('Successfully emitted inventory_reserved event');
-        })
-        .catch((error) => {
-          this.logger.error('Failed to emit inventory_reserved event', error);
-        });
-
-      this.rmqService.ack(context);
-    } catch (error) {
-      this.logger.error('Error processing order', error);
-
-      await lastValueFrom(
-        this.ordersClient.emit('inventory_unavailable', createdOrder),
-      ).catch((error) => {
-        this.logger.error('Failed to emit inventory_unavailable event', error);
-      });
-
-      this.rmqService.ack(context);
-    }
+    await this.inventoryService.reserveItems(createdOrder, context);
   }
 }

@@ -32,7 +32,9 @@ export class ProductRepository extends AbstractRepository<Product> {
   ): Promise<ProductDTO[]> {
     return this.model
       .find(filterQuery, projection)
-      .populate<{ reservations: Reservation }>('reservations')
+      .populate<{
+        reservations: Reservation;
+      }>({ path: 'reservations', model: 'Reservation' })
       .lean() as unknown as Promise<ProductDTO[]>;
   }
 }

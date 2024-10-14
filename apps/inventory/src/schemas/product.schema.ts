@@ -21,17 +21,3 @@ export class Product extends AbstractDocument {
 }
 
 export const ProductSchema = SchemaFactory.createForClass(Product);
-
-@Schema({ versionKey: false })
-export class Reservation extends AbstractDocument {
-  @Prop({ required: true })
-  orderId: string;
-
-  @Prop({ required: true })
-  quantity: number;
-
-  @Prop({ required: true })
-  expiresAt: Date;
-}
-
-export const ReservationSchema = SchemaFactory.createForClass(Reservation);

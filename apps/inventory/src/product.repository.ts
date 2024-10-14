@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { AbstractRepository } from '@app/common';
-import { Product, Reservation } from './schemas/product.schema';
+import { Product } from './schemas/product.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, SaveOptions } from 'mongoose';
 import { ProductDTO } from './dto/add-product.dto';
+import { Reservation } from './schemas/reservation.schema';
 
 @Injectable()
 export class ProductRepository extends AbstractRepository<Product> {

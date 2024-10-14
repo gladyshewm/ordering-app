@@ -21,6 +21,7 @@ import {
 } from './dto/order.dto';
 import { Types } from 'mongoose';
 import { RmqService } from '@app/common';
+import { PaymentDTO } from './dto/payment.dto';
 
 @Injectable()
 export class OrdersService {
@@ -60,7 +61,12 @@ export class OrdersService {
         if (inventoryResponse.success) {
           this.logger.log('Inventory reserved successfully');
           await this.updateOrderStatus(createdOrder._id, OrderStatus.CONFIRMED);
-          await this.processPayment(createdOrder);
+          const paymentDetails: PaymentDTO = {
+            orderId: createdOrder._id,
+            totalPrice: createdOrder.totalPrice,
+            phoneNumber: createdOrder.phoneNumber,
+          };
+          await this.processPayment(paymentDetails);
         } else {
           this.logger.error('Failed to reserve items');
           await this.updateOrderStatus(createdOrder._id, OrderStatus.CANCELLED);
@@ -90,17 +96,17 @@ export class OrdersService {
     }
   }
 
-  async processPayment(createdOrder: CreatedOrderDTO): Promise<void> {
+  async processPayment(paymentDetails: PaymentDTO): Promise<void> {
     try {
       await lastValueFrom(
-        this.billingClient.emit('order_confirmed', createdOrder),
+        this.billingClient.emit('order_confirmed', paymentDetails),
       );
       this.logger.log(
-        `Successfully emitted order_confirmed event for order ${createdOrder._id}`,
+        `Successfully emitted order_confirmed event for order ${paymentDetails.orderId}`,
       );
     } catch (error) {
       this.logger.error(
-        `Failed to emit order_confirmed event for order ${createdOrder._id}`,
+        `Failed to emit order_confirmed event for order ${paymentDetails.orderId}`,
         error,
       );
       throw new Error('Failed to process payment');
@@ -215,7 +221,7 @@ export class OrdersService {
   ) {
     try {
       await this.updateOrderStatus(orderId, newStatus);
-      await this.delieverTheOrder(orderId);
+      await this.deliverTheOrder(orderId);
     } catch (error) {
       this.logger.error(`Failed to update order ${orderId} status`, error);
     } finally {
@@ -223,7 +229,7 @@ export class OrdersService {
     }
   }
 
-  async delieverTheOrder(orderId: string) {
+  async deliverTheOrder(orderId: string) {
     try {
       await lastValueFrom(this.shippingClient.emit('order_paid', orderId));
       this.logger.log(

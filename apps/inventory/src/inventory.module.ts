@@ -6,14 +6,10 @@ import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 import { INVENTORY_SERVICE, ORDERS_SERVICE } from './constants/services';
 import { MongooseModule } from '@nestjs/mongoose';
-import {
-  Product,
-  ProductSchema,
-  Reservation,
-  ReservationSchema,
-} from './schemas/product.schema';
+import { Product, ProductSchema } from './schemas/product.schema';
 import { ProductRepository } from './product.repository';
 import { ReservationRepository } from './reservation.repository';
+import { Reservation, ReservationSchema } from './schemas/reservation.schema';
 
 @Module({
   imports: [

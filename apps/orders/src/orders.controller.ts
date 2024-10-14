@@ -20,6 +20,7 @@ import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
 import { ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ApiOrderResponse } from './decorators/swagger/api-order.decorator';
 import { ApiCreatedOrderResponse } from './decorators/swagger/api-created-order.decorator';
+import { PaymentDTO } from './dto/payment.dto';
 
 @Controller('orders')
 @ApiTags('orders')
@@ -87,12 +88,14 @@ export class OrdersController {
 
   @EventPattern('payment_successful')
   async handlePaymentSuccessful(
-    @Payload() order: OrderDTO,
+    @Payload() paymentDetails: PaymentDTO,
     @Ctx() context: RmqContext,
   ) {
-    this.logger.log(`Received payment_successful event for order ${order._id}`);
+    this.logger.log(
+      `Received payment_successful event for order ${paymentDetails.orderId}`,
+    );
     await this.ordersService.handlePaymentSuccessful(
-      order._id,
+      paymentDetails.orderId,
       OrderStatus.PAID,
       context,
     );

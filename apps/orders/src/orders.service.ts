@@ -35,34 +35,76 @@ export class OrdersService {
   ) {}
 
   async createOrder(request: CreateOrderDTO): Promise<CreatedOrderDTO> {
-    const totalPrice = request.items.reduce(
-      (acc, item) => acc + item.price * item.quantity,
-      0,
-    );
-    const order = await this.ordersRepository.create({
-      ...request,
-      totalPrice,
-    });
-
-    const createdOrder: CreatedOrderDTO = {
-      _id: String(order._id),
-      items: order.items,
-      address: order.address,
-      phoneNumber: order.phoneNumber,
-      totalPrice: order.totalPrice,
-    };
-
-    await lastValueFrom(
-      this.inventoryClient.emit('order_created', createdOrder),
-    )
-      .then(() => {
-        this.logger.log('Successfully emitted order_created event');
-      })
-      .catch((error) => {
-        this.logger.error('Failed to emit order_created event', error);
+    try {
+      const totalPrice = request.items.reduce(
+        (acc, item) => acc + item.price * item.quantity,
+        0,
+      );
+      const order = await this.ordersRepository.create({
+        ...request,
+        totalPrice,
       });
 
-    return createdOrder;
+      const createdOrder: CreatedOrderDTO = {
+        _id: String(order._id),
+        items: order.items,
+        address: order.address,
+        phoneNumber: order.phoneNumber,
+        totalPrice: order.totalPrice,
+      };
+
+      try {
+        const inventoryResponse: { success: boolean } =
+          await this.reserveInventory(createdOrder);
+
+        if (inventoryResponse.success) {
+          this.logger.log('Inventory reserved successfully');
+          await this.updateOrderStatus(createdOrder._id, OrderStatus.CONFIRMED);
+          await this.processPayment(createdOrder);
+        } else {
+          this.logger.error('Failed to reserve items');
+          await this.updateOrderStatus(createdOrder._id, OrderStatus.CANCELLED);
+        }
+      } catch (error) {
+        this.logger.error('Failed to emit order_created event', error);
+      }
+
+      return createdOrder;
+    } catch (error) {
+      this.logger.error('Failed to create order', error);
+      throw new BadRequestException(error);
+    }
+  }
+
+  async reserveInventory(
+    order: CreatedOrderDTO,
+  ): Promise<{ success: boolean }> {
+    try {
+      const response = await lastValueFrom(
+        this.inventoryClient.send('order_created', order),
+      );
+      return response;
+    } catch (error) {
+      this.logger.error('Failed to reserve inventory', error);
+      return { success: false };
+    }
+  }
+
+  async processPayment(createdOrder: CreatedOrderDTO): Promise<void> {
+    try {
+      await lastValueFrom(
+        this.billingClient.emit('order_confirmed', createdOrder),
+      );
+      this.logger.log(
+        `Successfully emitted order_confirmed event for order ${createdOrder._id}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to emit order_confirmed event for order ${createdOrder._id}`,
+        error,
+      );
+      throw new Error('Failed to process payment');
+    }
   }
 
   async getOrders(): Promise<OrderDTO[]> {
@@ -120,6 +162,10 @@ export class OrdersService {
 
     const updatedOrder = await this.ordersRepository.updateOrder(order);
 
+    this.logger.log(
+      `Successfully updated order ${orderId} status to ${newStatus}`,
+    );
+
     return {
       _id: String(updatedOrder._id),
       items: updatedOrder.items,
@@ -148,41 +194,6 @@ export class OrdersService {
     return allowedTransitions[currentStatus].includes(newStatus) ?? false;
   }
 
-  async handleInventoryReserved(
-    orderId: string,
-    newStatus: OrderStatus,
-    context: RmqContext,
-  ) {
-    try {
-      await this.updateOrderStatus(orderId, newStatus);
-
-      this.logger.log(
-        `Successfully updated order ${orderId} status to ${newStatus}`,
-      );
-
-      /* await lastValueFrom(
-        this.billingClient.emit('order_confirmed', createdOrder),
-      )
-        .then(() => {
-          this.logger.log(
-            `Successfully emitted order_confirmed event for order ${createdOrder._id}`,
-          );
-        })
-        .catch((error) => {
-          this.logger.error(
-            `Failed to emit order_confirmed event for order ${createdOrder._id}`,
-            error,
-          );
-          throw error;
-        }); */
-
-      this.rmqService.ack(context);
-    } catch (error) {
-      this.logger.error(`Failed to update order ${orderId} status`, error);
-      this.rmqService.nack(context);
-    }
-  }
-
   async handleInventoryUnavailable(
     orderId: string,
     newStatus: OrderStatus,
@@ -190,15 +201,10 @@ export class OrdersService {
   ) {
     try {
       await this.updateOrderStatus(orderId, newStatus);
-
-      this.logger.log(
-        `Successfully updated order ${orderId} status to CANCELLED`,
-      );
-
-      this.rmqService.ack(context);
     } catch (error) {
       this.logger.error(`Failed to update order ${orderId} status`, error);
-      this.rmqService.nack(context);
+    } finally {
+      this.rmqService.ack(context);
     }
   }
 
@@ -209,27 +215,26 @@ export class OrdersService {
   ) {
     try {
       await this.updateOrderStatus(orderId, newStatus);
-
-      this.logger.log(`Successfully updated order ${orderId} status to PAID`);
-
-      await lastValueFrom(this.shippingClient.emit('order_paid', orderId))
-        .then(() => {
-          this.logger.log(
-            `Successfully emitted order_paid event for order ${orderId}`,
-          );
-        })
-        .catch((error) => {
-          this.logger.error(
-            `Failed to emit order_paid event for order ${orderId}`,
-            error,
-          );
-          throw error;
-        });
-
-      this.rmqService.ack(context);
+      await this.delieverTheOrder(orderId);
     } catch (error) {
       this.logger.error(`Failed to update order ${orderId} status`, error);
-      this.rmqService.nack(context);
+    } finally {
+      this.rmqService.ack(context);
+    }
+  }
+
+  async delieverTheOrder(orderId: string) {
+    try {
+      await lastValueFrom(this.shippingClient.emit('order_paid', orderId));
+      this.logger.log(
+        `Successfully emitted order_paid event for order ${orderId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to emit order_paid event for order ${orderId}`,
+        error,
+      );
+      throw new Error('Failed to deliver the order');
     }
   }
 
@@ -240,15 +245,10 @@ export class OrdersService {
   ) {
     try {
       await this.updateOrderStatus(orderId, newStatus);
-
-      this.logger.log(
-        `Successfully updated order ${orderId} status to PROCESSING`,
-      );
-
-      this.rmqService.ack(context);
     } catch (error) {
       this.logger.error(`Failed to update order ${orderId} status`, error);
-      this.rmqService.nack(context);
+    } finally {
+      this.rmqService.ack(context);
     }
   }
 }

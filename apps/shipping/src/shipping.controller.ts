@@ -24,15 +24,15 @@ export class ShippingController {
 
   @EventPattern('order_paid')
   async handleOrderPaid(
-    @Payload() paidOrder: PaidOrderDTO,
+    @Payload() orderId: string,
     @Ctx() context: RmqContext,
   ) {
-    this.logger.log(`Received order_paid event for order ${paidOrder._id}`);
+    this.logger.log(`Received order_paid event for order ${orderId}`);
     try {
-      await this.shippingService.ship(paidOrder);
+      await this.shippingService.ship(orderId);
 
       await lastValueFrom(
-        this.ordersClient.emit('shipping_processing', paidOrder),
+        this.ordersClient.emit('shipping_processing', orderId),
       )
         .then(() => {
           this.logger.log('Successfully emitted shipping_processing event');
@@ -46,7 +46,7 @@ export class ShippingController {
       this.logger.error('Error processing order', error);
 
       await lastValueFrom(
-        this.ordersClient.emit('shipping_failed', paidOrder),
+        this.ordersClient.emit('shipping_failed', orderId),
       ).catch((error) => {
         this.logger.error('Failed to emit shipping_failed event', error);
       });

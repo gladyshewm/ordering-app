@@ -5,7 +5,7 @@ import { PaidOrderDTO } from './dto/order-paid.dto';
 export class ShippingService {
   private readonly logger = new Logger(ShippingService.name);
 
-  async ship(paidOrder: PaidOrderDTO) {
-    this.logger.log(`Shipping order ${paidOrder._id}`);
+  async ship(orderId: string) {
+    this.logger.log(`Shipping order ${orderId}`);
   }
 }

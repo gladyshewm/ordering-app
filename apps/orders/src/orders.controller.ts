@@ -70,21 +70,6 @@ export class OrdersController {
     return order.statusHistory;
   }
 
-  @EventPattern('inventory_reserved')
-  async handleInventoryReserved(
-    @Payload() createdOrder: CreatedOrderDTO,
-    @Ctx() context: RmqContext,
-  ) {
-    this.logger.log(
-      `Received inventory_reserved event for order ${createdOrder._id}`,
-    );
-    await this.ordersService.handleInventoryReserved(
-      createdOrder._id,
-      OrderStatus.CONFIRMED,
-      context,
-    );
-  }
-
   @EventPattern('inventory_unavailable')
   async handleInventoryUnavailable(
     @Payload() createdOrder: CreatedOrderDTO,
@@ -115,14 +100,12 @@ export class OrdersController {
 
   @EventPattern('shipping_processing')
   async handleShippingProcessing(
-    @Payload() order: OrderDTO,
+    @Payload() orderId: string,
     @Ctx() context: RmqContext,
   ) {
-    this.logger.log(
-      `Received shipping_processing event for order ${order._id}`,
-    );
+    this.logger.log(`Received shipping_processing event for order ${orderId}`);
     await this.ordersService.handleShippingProcessing(
-      order._id,
+      orderId,
       OrderStatus.PROCESSING,
       context,
     );

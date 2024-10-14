@@ -1,6 +1,11 @@
 import { Body, Controller, Get, Logger, Post } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
-import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
+import {
+  Ctx,
+  MessagePattern,
+  Payload,
+  RmqContext,
+} from '@nestjs/microservices';
 import { CreatedOrderDTO } from './dto/order-created.dto';
 import {
   AddProductDTO,
@@ -39,12 +44,23 @@ export class InventoryController {
     return this.inventoryService.getReservations();
   }
 
-  @EventPattern('order_created')
+  @MessagePattern('order_created')
   async handleOrderCreated(
     @Payload() createdOrder: CreatedOrderDTO,
     @Ctx() context: RmqContext,
   ) {
-    this.logger.log('Received order_created event');
-    await this.inventoryService.reserveItems(createdOrder, context);
+    try {
+      await this.inventoryService.reserveItems(createdOrder, context);
+      this.logger.log(
+        `Items successfully reserved for order ${createdOrder._id}`,
+      );
+      return { success: true };
+    } catch (error) {
+      this.logger.error(
+        `Failed to reserve items for order ${createdOrder._id}`,
+        error,
+      );
+      return { success: false };
+    }
   }
 }

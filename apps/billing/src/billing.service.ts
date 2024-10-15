@@ -5,6 +5,7 @@ import { ORDERS_SERVICE } from './constants/services';
 import { ClientProxy, RmqContext } from '@nestjs/microservices';
 import { BillingRepository } from './billing.repository';
 import { PaymentDTO } from './dto/payment.dto';
+import { BillingDTO, PaymentStatus } from './dto/billing.dto';
 
 @Injectable()
 export class BillingService {
@@ -15,6 +16,30 @@ export class BillingService {
     private readonly billingRepository: BillingRepository,
     @Inject(ORDERS_SERVICE) private readonly ordersClient: ClientProxy,
   ) {}
+
+  async getPayments(): Promise<BillingDTO[]> {
+    const billings = await this.billingRepository.find({});
+    return billings.map((billing) => ({
+      _id: String(billing._id),
+      orderId: billing.orderId,
+      amount: billing.amount,
+      status: billing.status as PaymentStatus,
+      createdAt: billing.createdAt,
+      processedAt: billing.processedAt,
+    }));
+  }
+
+  async getPaymentsByOrderId(orderId: string): Promise<BillingDTO[]> {
+    const billings = await this.billingRepository.find({ orderId });
+    return billings.map((billing) => ({
+      _id: String(billing._id),
+      orderId: billing.orderId,
+      amount: billing.amount,
+      status: billing.status as PaymentStatus,
+      createdAt: billing.createdAt,
+      processedAt: billing.processedAt,
+    }));
+  }
 
   async bill(paymentDetails: PaymentDTO, context: RmqContext) {
     try {

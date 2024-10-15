@@ -1,73 +1,115 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+# Ordering App - Microservices Architecture
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+This project is a microservices-based ordering system built with NestJS, RabbitMQ, and MongoDB. The system consists of four main services:
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- **Orders Service**: Manages orders and order statuses.
+- **Billing Service**: Handles payments.
+- **Inventory Service**: Manages product inventory and reservations.
+- **Shipping Service**: Manages order shipping and delivery.
+Each microservice communicates asynchronously through RabbitMQ for event-driven architecture and uses MongoDB to store its own data. The system is orchestrated using Docker Compose.
 
-## Description
+## Services Overview
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+1. **Orders Service**: Central service managing the order creation, updates, and cancellation. It handles interactions with other services by emitting and consuming RabbitMQ events.
 
-## Installation
+2. **Inventory Service**: Manages stock levels and reserves items for orders. It listens for order creation events and emits inventory availability statuses.
 
+3. **Billing Service**: Processes payments and handles refunds upon order cancellation. It reacts to order confirmation events and emits payment success or failure events.
+
+4. **Shipping Service**: Manages shipping status updates. It listens for payment confirmations and coordinates the shipment process.
+
+## Getting Started
+
+### Prerequisites
+Ensure you have the following installed:
+
+- Docker
+- Docker Compose
+
+### Setup and Running the Application
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/ordering-app.git
+   cd ordering-app
+   ```
+
+2. Create .env files for each service based on the provided examples.
+
+Example .env for Orders Service:
 ```bash
-$ npm install
+MONGODB_URI=mongodb://root:password123@mongo:27017
+PORT=3000
+RABBIT_MQ_URI=amqp://rabbitmq:5672
+RABBIT_MQ_ORDERS_QUEUE=orders
+RABBIT_MQ_INVENTORY_QUEUE=inventory
+RABBIT_MQ_BILLING_QUEUE=billing
+RABBIT_MQ_SHIPPING_QUEUE=shipping
 ```
 
-## Running the app
-
+Example .env for Billing Service:
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+PORT=3002
+MONGODB_URI=mongodb://root:password123@mongo:27017
+RABBIT_MQ_URI=amqp://rabbitmq:5672
+RABBIT_MQ_ORDERS_QUEUE=orders
+RABBIT_MQ_BILLING_QUEUE=billing
 ```
 
-## Test
-
+3. Start services with Docker Compose:
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+docker-compose up --build
 ```
 
-## Support
+This will start the following services:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+- **MongoDB**: A NoSQL database used by all services.
+- **RabbitMQ**: Message broker for event-driven communication.
+- **Orders, Billing, Inventory, and Shipping services** running in their respective containers.
 
-## Stay in touch
+Each service will automatically connect to RabbitMQ and MongoDB using the configurations provided in .env files.
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+4. Running individual services locally
 
-## License
+You can also run each service individually if needed. Make sure MongoDB and RabbitMQ are running (either in containers or locally), and then use the following commands:
+```bash
+# Orders Service
+npm run start orders
 
-Nest is [MIT licensed](LICENSE).
+# Billing Service
+npm run start billing
+
+# Inventory Service
+npm run start inventory
+
+# Shipping Service
+npm run start shipping
+```
+
+5. Accessing RabbitMQ Management
+
+RabbitMQ has a management interface available at http://localhost:15672.
+Use the following default credentials to log in:
+
+- Username: guest
+- Password: guest
+
+6. Accessing MongoDB
+You can connect to MongoDB using a MongoDB client such as MongoDB Compass or from the terminal:
+```bash
+mongo mongodb://root:password123@localhost:27017
+```
+
+### Accessing Swagger API Docs
+Each service exposes its own Swagger UI for API documentation at the following URLs:
+
+- Orders Service: http://localhost:3000/api
+- Inventory Service: http://localhost:3001/api
+- Billing Service: http://localhost:3002/api
+- Shipping Service: http://localhost:3003/api
+
+### Stopping the Application
+
+To stop all containers, run:
+```bash
+docker-compose down
+```

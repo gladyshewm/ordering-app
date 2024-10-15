@@ -18,7 +18,15 @@ export class ShippingService {
   ) {}
 
   async getShipments(): Promise<ShipmentDTO[]> {
-    return this.shippingRepository.find({});
+    const shipments = await this.shippingRepository.find({});
+    return shipments.map((shipment) => ({
+      _id: String(shipment._id),
+      orderId: shipment.orderId,
+      address: shipment.address,
+      trackingNumber: shipment.trackingNumber,
+      estimatedDeliveryDate: shipment.estimatedDeliveryDate,
+      actualDeliveryDate: shipment.actualDeliveryDate,
+    }));
   }
 
   async ship(order: PaidOrderDTO, context: RmqContext) {

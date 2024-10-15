@@ -1,10 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
-import { Order, OrderStatus } from './schemas/order.schema';
-import { Types } from 'mongoose';
-import { CreateOrderDto } from './dto/create-order.dto';
-import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { UpdateOrderStatusDTO } from './dto/update-order-status.dto';
+import {
+  CreatedOrderDTO,
+  CreateOrderDTO,
+  OrderDTO,
+  OrderStatus,
+} from './dto/order.dto';
 
 jest.mock('./orders.service');
 
@@ -29,58 +32,63 @@ describe('OrdersController', () => {
   });
 
   describe('createOrder', () => {
-    let createdOrder: Order;
+    let createdOrder: CreatedOrderDTO;
     const order = {
-      _id: 'testID' as unknown as Types.ObjectId,
-      name: 'test',
-      price: 1,
+      items: [],
+      address: 'test',
       phoneNumber: 'test',
-    } as Order;
-    const createOrderDto: CreateOrderDto = {
-      name: 'test',
-      price: 1,
+    } as CreateOrderDTO;
+    const createdOrderDto: CreatedOrderDTO = {
+      _id: 'testID',
+      items: [],
+      address: 'test',
       phoneNumber: 'test',
+      totalPrice: 1,
     };
 
     beforeEach(async () => {
-      ordersService.createOrder.mockResolvedValue(order);
-      createdOrder = await ordersController.createOrder(createOrderDto);
+      ordersService.createOrder.mockResolvedValue(createdOrderDto);
+      createdOrder = await ordersController.createOrder(order);
     });
 
     it('should call ordersService', async () => {
-      expect(ordersService.createOrder).toHaveBeenCalledWith(createOrderDto);
+      expect(ordersService.createOrder).toHaveBeenCalledWith(order);
       expect(ordersService.createOrder).toHaveBeenCalledTimes(1);
     });
 
     it('should return created order', async () => {
-      expect(createdOrder).toEqual(order);
+      expect(createdOrder).toEqual(createdOrderDto);
     });
 
     it('should propagate error if ordersService throws an error', async () => {
       ordersService.createOrder.mockRejectedValue(new Error());
 
-      await expect(
-        ordersController.createOrder(createOrderDto),
-      ).rejects.toThrow(Error);
+      await expect(ordersController.createOrder(order)).rejects.toThrow(Error);
     });
   });
 
   describe('getOrders', () => {
-    let result: Order[];
+    let result: OrderDTO[];
     const orders = [
       {
-        _id: 'testID' as unknown as Types.ObjectId,
-        name: 'test',
-        price: 1,
+        _id: 'testID',
+        items: [],
+        address: 'test',
         phoneNumber: 'test',
+        status: OrderStatus.CREATED,
+        totalPrice: 1,
+        statusHistory: [],
       },
       {
-        _id: 'testID2' as unknown as Types.ObjectId,
-        name: 'test2',
-        price: 2,
+        _id: 'testID2',
+        items: [],
+        address: 'test22',
         phoneNumber: 'test2',
+        status: OrderStatus.CREATED,
+        totalPrice: 2,
+        statusHistory: [],
       },
-    ] as Order[];
+    ] as OrderDTO[];
 
     beforeEach(async () => {
       ordersService.getOrders.mockResolvedValue(orders);
@@ -103,13 +111,16 @@ describe('OrdersController', () => {
   });
 
   describe('getOrder', () => {
-    let result: Order;
-    const order = {
-      _id: 'testID' as unknown as Types.ObjectId,
-      name: 'test',
-      price: 1,
+    let result: OrderDTO;
+    const order: OrderDTO = {
+      _id: 'testID',
+      items: [],
+      address: 'test',
       phoneNumber: 'test',
-    } as Order;
+      status: OrderStatus.CREATED,
+      totalPrice: 1,
+      statusHistory: [],
+    };
 
     beforeEach(async () => {
       ordersService.getOrder.mockResolvedValue(order);
@@ -133,19 +144,20 @@ describe('OrdersController', () => {
   });
 
   describe('updateOrderStatus', () => {
-    let result: Order;
-    const order = {
-      _id: 'testID' as unknown as Types.ObjectId,
-      name: 'test',
-      price: 1,
+    let result: OrderDTO;
+    const order: OrderDTO = {
+      _id: 'testID',
+      items: [],
+      address: 'test',
       phoneNumber: 'test',
+      totalPrice: 1,
       status: OrderStatus.DELIVERED,
       statusHistory: [
         { status: OrderStatus.CREATED, date: new Date() },
         { status: OrderStatus.DELIVERED, date: new Date() },
       ],
-    } as Order;
-    const updateStatusDto: UpdateOrderStatusDto = {
+    };
+    const updateStatusDto: UpdateOrderStatusDTO = {
       status: OrderStatus.DELIVERED,
       comment: 'test comment',
     };

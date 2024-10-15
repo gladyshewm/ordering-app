@@ -8,7 +8,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
-import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { UpdateOrderStatusDTO } from './dto/update-order-status.dto';
 import {
   CreatedOrderDTO,
   CreateOrderDTO,
@@ -50,10 +50,10 @@ export class OrdersController {
 
   @Put(':id/status')
   @ApiOrderResponse('Update an order status')
-  @ApiBody({ type: UpdateOrderStatusDto })
+  @ApiBody({ type: UpdateOrderStatusDTO })
   async updateOrderStatus(
     @Param('id') id: string,
-    @Body() updateStatusDto: UpdateOrderStatusDto,
+    @Body() updateStatusDto: UpdateOrderStatusDTO,
   ): Promise<OrderDTO> {
     return this.ordersService.updateOrderStatus(
       id,

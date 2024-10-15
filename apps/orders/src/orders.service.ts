@@ -22,6 +22,7 @@ import {
 import { Types } from 'mongoose';
 import { RmqService } from '@app/common';
 import { PaymentDTO } from './dto/payment.dto';
+import { OrderToShipDTO } from './dto/ship-order.dto';
 
 @Injectable()
 export class OrdersService {
@@ -231,7 +232,21 @@ export class OrdersService {
 
   async deliverTheOrder(orderId: string) {
     try {
-      await lastValueFrom(this.shippingClient.emit('order_paid', orderId));
+      const order = await this.ordersRepository.findOne(
+        {
+          _id: orderId,
+        },
+        {
+          orderId: 1,
+          address: 1,
+        },
+      );
+      const orderToShip: OrderToShipDTO = {
+        orderId: String(order._id),
+        address: order.address,
+      };
+
+      await lastValueFrom(this.shippingClient.emit('order_paid', orderToShip));
       this.logger.log(
         `Successfully emitted order_paid event for order ${orderId}`,
       );
@@ -245,6 +260,34 @@ export class OrdersService {
   }
 
   async handleShippingProcessing(
+    orderId: string,
+    newStatus: OrderStatus,
+    context: RmqContext,
+  ) {
+    try {
+      await this.updateOrderStatus(orderId, newStatus);
+    } catch (error) {
+      this.logger.error(`Failed to update order ${orderId} status`, error);
+    } finally {
+      this.rmqService.ack(context);
+    }
+  }
+
+  async handleOrderShipped(
+    orderId: string,
+    newStatus: OrderStatus,
+    context: RmqContext,
+  ) {
+    try {
+      await this.updateOrderStatus(orderId, newStatus);
+    } catch (error) {
+      this.logger.error(`Failed to update order ${orderId} status`, error);
+    } finally {
+      this.rmqService.ack(context);
+    }
+  }
+
+  async handleOrderDelivered(
     orderId: string,
     newStatus: OrderStatus,
     context: RmqContext,

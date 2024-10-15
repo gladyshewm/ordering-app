@@ -113,4 +113,30 @@ export class OrdersController {
       context,
     );
   }
+
+  @EventPattern('order_shipped')
+  async handleOrderShipped(
+    @Payload() orderId: string,
+    @Ctx() context: RmqContext,
+  ) {
+    this.logger.log(`Received order_shipped event for order ${orderId}`);
+    await this.ordersService.handleOrderShipped(
+      orderId,
+      OrderStatus.SHIPPED,
+      context,
+    );
+  }
+
+  @EventPattern('order_delivered')
+  async handleOrderDelivered(
+    @Payload() orderId: string,
+    @Ctx() context: RmqContext,
+  ) {
+    this.logger.log(`Received order_delivered event for order ${orderId}`);
+    await this.ordersService.handleOrderDelivered(
+      orderId,
+      OrderStatus.DELIVERED,
+      context,
+    );
+  }
 }

@@ -217,7 +217,6 @@ describe('OrdersController', () => {
       it('should call ordersService', async () => {
         expect(ordersService.handleInventoryUnavailable).toHaveBeenCalledWith(
           'testID',
-          OrderStatus.CANCELLED,
           context,
         );
         expect(ordersService.handleInventoryUnavailable).toHaveBeenCalledTimes(
@@ -249,7 +248,6 @@ describe('OrdersController', () => {
       it('should call ordersService', async () => {
         expect(ordersService.handlePaymentSuccessful).toHaveBeenCalledWith(
           'testID',
-          OrderStatus.PAID,
           context,
         );
         expect(ordersService.handlePaymentSuccessful).toHaveBeenCalledTimes(1);
@@ -275,7 +273,6 @@ describe('OrdersController', () => {
       it('should call ordersService', async () => {
         expect(ordersService.handleShippingProcessing).toHaveBeenCalledWith(
           'testID',
-          OrderStatus.PROCESSING,
           context,
         );
         expect(ordersService.handleShippingProcessing).toHaveBeenCalledTimes(1);
@@ -301,7 +298,6 @@ describe('OrdersController', () => {
       it('should call ordersService', async () => {
         expect(ordersService.handleOrderShipped).toHaveBeenCalledWith(
           'testID',
-          OrderStatus.SHIPPED,
           context,
         );
         expect(ordersService.handleOrderShipped).toHaveBeenCalledTimes(1);
@@ -327,7 +323,6 @@ describe('OrdersController', () => {
       it('should call ordersService', async () => {
         expect(ordersService.handleOrderDelivered).toHaveBeenCalledWith(
           'testID',
-          OrderStatus.DELIVERED,
           context,
         );
         expect(ordersService.handleOrderDelivered).toHaveBeenCalledTimes(1);

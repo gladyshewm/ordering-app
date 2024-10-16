@@ -23,6 +23,7 @@ import { Types } from 'mongoose';
 import { RmqService } from '@app/common';
 import { PaymentDTO } from './dto/payment.dto';
 import { OrderToShipDTO } from './dto/ship-order.dto';
+import { Order } from './schemas/order.schema';
 
 @Injectable()
 export class OrdersService {
@@ -36,19 +37,33 @@ export class OrdersService {
     @Inject(SHIPPING_SERVICE) private shippingClient: ClientProxy,
   ) {}
 
+  private convertOrderToDTO(order: Order): OrderDTO {
+    return {
+      _id: String(order._id),
+      items: order.items,
+      address: order.address,
+      phoneNumber: order.phoneNumber,
+      totalPrice: order.totalPrice,
+      status: order.status,
+      statusHistory: order.statusHistory,
+    };
+  }
+
   async createOrder(request: CreateOrderDTO): Promise<CreatedOrderDTO> {
     try {
       const totalPrice = request.items.reduce(
         (acc, item) => acc + item.price * item.quantity,
         0,
       );
-      const order = await this.ordersRepository.create({
-        ...request,
-        totalPrice,
-      });
+      const order = this.convertOrderToDTO(
+        await this.ordersRepository.create({
+          ...request,
+          totalPrice,
+        }),
+      );
 
       const createdOrder: CreatedOrderDTO = {
-        _id: String(order._id),
+        _id: order._id,
         items: order.items,
         address: order.address,
         phoneNumber: order.phoneNumber,
@@ -73,7 +88,8 @@ export class OrdersService {
           await this.updateOrderStatus(createdOrder._id, OrderStatus.CANCELLED);
         }
       } catch (error) {
-        this.logger.error('Failed to emit order_created event', error);
+        this.logger.error('Error during order processing', error);
+        throw new BadRequestException(error);
       }
 
       return createdOrder;
@@ -115,29 +131,33 @@ export class OrdersService {
   }
 
   async getOrders(): Promise<OrderDTO[]> {
-    const orders = await this.ordersRepository.find({});
-    return orders.map((order) => ({
-      _id: String(order._id),
-      items: order.items,
-      address: order.address,
-      phoneNumber: order.phoneNumber,
-      totalPrice: order.totalPrice,
-      status: order.status,
-      statusHistory: order.statusHistory,
-    }));
+    try {
+      const orders = await this.ordersRepository.find({});
+
+      if (!orders) {
+        throw new NotFoundException('Orders not found');
+      }
+
+      return orders.map((order) => this.convertOrderToDTO(order));
+    } catch (error) {
+      this.logger.error('Failed to get orders', error);
+      throw new Error('Failed to get orders');
+    }
   }
 
   async getOrder(id: string): Promise<OrderDTO> {
-    const order = await this.ordersRepository.findOne({ _id: id });
-    return {
-      _id: String(order._id),
-      items: order.items,
-      address: order.address,
-      phoneNumber: order.phoneNumber,
-      totalPrice: order.totalPrice,
-      status: order.status,
-      statusHistory: order.statusHistory,
-    };
+    try {
+      const order = await this.ordersRepository.findOne({ _id: id });
+
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+
+      return this.convertOrderToDTO(order);
+    } catch (error) {
+      this.logger.error(`Failed to get order ${id}`, error);
+      throw new Error('Failed to get order');
+    }
   }
 
   async updateOrderStatus(
@@ -145,43 +165,42 @@ export class OrdersService {
     newStatus: OrderStatus,
     comment: string = '',
   ): Promise<OrderDTO> {
-    const order = await this.ordersRepository.findOne({
-      _id: new Types.ObjectId(orderId),
-    });
+    try {
+      const order = await this.ordersRepository.findOne({
+        _id: new Types.ObjectId(orderId),
+      });
 
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
 
-    if (!this.isStatusTransitionAllowed(order.status, newStatus)) {
-      throw new BadRequestException(
-        `Status transition from ${order.status} to ${newStatus} is not allowed`,
+      if (!this.isStatusTransitionAllowed(order.status, newStatus)) {
+        throw new BadRequestException(
+          `Status transition from ${order.status} to ${newStatus} is not allowed`,
+        );
+      }
+
+      const newStatusHistory = {
+        status: newStatus,
+        date: new Date(),
+        comment: comment
+          ? comment
+          : `Status changed from ${order.status} to ${newStatus}`,
+      };
+      order.status = newStatus;
+      order.statusHistory.push(newStatusHistory);
+
+      const updatedOrder = await this.ordersRepository.updateOrder(order);
+
+      this.logger.log(
+        `Successfully updated order ${orderId} status to ${newStatus}`,
       );
+
+      return this.convertOrderToDTO(updatedOrder);
+    } catch (error) {
+      this.logger.error('Failed to update order status', error);
+      throw new Error('Failed to update order status');
     }
-
-    const newStatusHistory = {
-      status: newStatus,
-      date: new Date(),
-      comment: comment,
-    };
-    order.status = newStatus;
-    order.statusHistory.push(newStatusHistory);
-
-    const updatedOrder = await this.ordersRepository.updateOrder(order);
-
-    this.logger.log(
-      `Successfully updated order ${orderId} status to ${newStatus}`,
-    );
-
-    return {
-      _id: String(updatedOrder._id),
-      items: updatedOrder.items,
-      address: updatedOrder.address,
-      phoneNumber: updatedOrder.phoneNumber,
-      totalPrice: updatedOrder.totalPrice,
-      status: updatedOrder.status,
-      statusHistory: updatedOrder.statusHistory,
-    } as OrderDTO;
   }
 
   private isStatusTransitionAllowed(
@@ -203,11 +222,10 @@ export class OrdersService {
 
   async handleInventoryUnavailable(
     orderId: string,
-    newStatus: OrderStatus,
     context: RmqContext,
-  ) {
+  ): Promise<void> {
     try {
-      await this.updateOrderStatus(orderId, newStatus);
+      await this.updateOrderStatus(orderId, OrderStatus.CANCELLED);
     } catch (error) {
       this.logger.error(`Failed to update order ${orderId} status`, error);
     } finally {
@@ -217,11 +235,10 @@ export class OrdersService {
 
   async handlePaymentSuccessful(
     orderId: string,
-    newStatus: OrderStatus,
     context: RmqContext,
-  ) {
+  ): Promise<void> {
     try {
-      await this.updateOrderStatus(orderId, newStatus);
+      await this.updateOrderStatus(orderId, OrderStatus.PAID);
       await this.deliverTheOrder(orderId);
     } catch (error) {
       this.logger.error(`Failed to update order ${orderId} status`, error);
@@ -230,7 +247,7 @@ export class OrdersService {
     }
   }
 
-  async deliverTheOrder(orderId: string) {
+  async deliverTheOrder(orderId: string): Promise<void> {
     try {
       const order = await this.ordersRepository.findOne(
         {
@@ -241,6 +258,11 @@ export class OrdersService {
           address: 1,
         },
       );
+
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+
       const orderToShip: OrderToShipDTO = {
         orderId: String(order._id),
         address: order.address,
@@ -261,11 +283,10 @@ export class OrdersService {
 
   async handleShippingProcessing(
     orderId: string,
-    newStatus: OrderStatus,
     context: RmqContext,
-  ) {
+  ): Promise<void> {
     try {
-      await this.updateOrderStatus(orderId, newStatus);
+      await this.updateOrderStatus(orderId, OrderStatus.PROCESSING);
     } catch (error) {
       this.logger.error(`Failed to update order ${orderId} status`, error);
     } finally {
@@ -275,11 +296,10 @@ export class OrdersService {
 
   async handleOrderShipped(
     orderId: string,
-    newStatus: OrderStatus,
     context: RmqContext,
-  ) {
+  ): Promise<void> {
     try {
-      await this.updateOrderStatus(orderId, newStatus);
+      await this.updateOrderStatus(orderId, OrderStatus.SHIPPED);
     } catch (error) {
       this.logger.error(`Failed to update order ${orderId} status`, error);
     } finally {
@@ -289,11 +309,10 @@ export class OrdersService {
 
   async handleOrderDelivered(
     orderId: string,
-    newStatus: OrderStatus,
     context: RmqContext,
-  ) {
+  ): Promise<void> {
     try {
-      await this.updateOrderStatus(orderId, newStatus);
+      await this.updateOrderStatus(orderId, OrderStatus.DELIVERED);
     } catch (error) {
       this.logger.error(`Failed to update order ${orderId} status`, error);
     } finally {

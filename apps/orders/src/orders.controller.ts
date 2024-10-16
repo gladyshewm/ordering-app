@@ -13,7 +13,6 @@ import {
   CreatedOrderDTO,
   CreateOrderDTO,
   OrderDTO,
-  OrderStatus,
   StatusHistoryDTO,
 } from './dto/order.dto';
 import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
@@ -81,7 +80,6 @@ export class OrdersController {
     );
     await this.ordersService.handleInventoryUnavailable(
       createdOrder._id,
-      OrderStatus.CANCELLED,
       context,
     );
   }
@@ -96,7 +94,6 @@ export class OrdersController {
     );
     await this.ordersService.handlePaymentSuccessful(
       paymentDetails.orderId,
-      OrderStatus.PAID,
       context,
     );
   }
@@ -107,11 +104,7 @@ export class OrdersController {
     @Ctx() context: RmqContext,
   ) {
     this.logger.log(`Received shipping_processing event for order ${orderId}`);
-    await this.ordersService.handleShippingProcessing(
-      orderId,
-      OrderStatus.PROCESSING,
-      context,
-    );
+    await this.ordersService.handleShippingProcessing(orderId, context);
   }
 
   @EventPattern('order_shipped')
@@ -120,11 +113,7 @@ export class OrdersController {
     @Ctx() context: RmqContext,
   ) {
     this.logger.log(`Received order_shipped event for order ${orderId}`);
-    await this.ordersService.handleOrderShipped(
-      orderId,
-      OrderStatus.SHIPPED,
-      context,
-    );
+    await this.ordersService.handleOrderShipped(orderId, context);
   }
 
   @EventPattern('order_delivered')
@@ -133,10 +122,6 @@ export class OrdersController {
     @Ctx() context: RmqContext,
   ) {
     this.logger.log(`Received order_delivered event for order ${orderId}`);
-    await this.ordersService.handleOrderDelivered(
-      orderId,
-      OrderStatus.DELIVERED,
-      context,
-    );
+    await this.ordersService.handleOrderDelivered(orderId, context);
   }
 }

@@ -111,11 +111,13 @@ describe('InventoryController', () => {
     let result: ReservationDTO[];
     const reservations: ReservationDTO[] = [
       {
+        _id: '670e2472a75b5d52968bb45d',
         orderId: 'order-1',
         quantity: 10,
         expiresAt: new Date(),
       },
       {
+        _id: '670e2472a75b5d52968bb45e',
         orderId: 'order-2',
         quantity: 20,
         expiresAt: new Date(),

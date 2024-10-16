@@ -8,6 +8,8 @@ import {
   OrderDTO,
   OrderStatus,
 } from './dto/order.dto';
+import { RmqContext } from '@nestjs/microservices';
+import { PaymentDTO } from './dto/payment.dto';
 
 jest.mock('./orders.service');
 
@@ -189,6 +191,155 @@ describe('OrdersController', () => {
       await expect(
         ordersController.updateOrderStatus('testID', updateStatusDto),
       ).rejects.toThrow(Error);
+    });
+  });
+
+  describe('events', () => {
+    const context = {} as unknown as RmqContext;
+
+    describe('handleInventoryUnavailable', () => {
+      const createdOrder: CreatedOrderDTO = {
+        _id: 'testID',
+        items: [],
+        address: 'test',
+        phoneNumber: 'test',
+        totalPrice: 1,
+      };
+
+      beforeEach(async () => {
+        ordersService.handleInventoryUnavailable.mockResolvedValue();
+        await ordersController.handleInventoryUnavailable(
+          createdOrder,
+          context,
+        );
+      });
+
+      it('should call ordersService', async () => {
+        expect(ordersService.handleInventoryUnavailable).toHaveBeenCalledWith(
+          'testID',
+          OrderStatus.CANCELLED,
+          context,
+        );
+        expect(ordersService.handleInventoryUnavailable).toHaveBeenCalledTimes(
+          1,
+        );
+      });
+
+      it('should propagate error if ordersService throws an error', async () => {
+        ordersService.handleInventoryUnavailable.mockRejectedValue(new Error());
+
+        await expect(
+          ordersController.handleInventoryUnavailable(createdOrder, context),
+        ).rejects.toThrow(Error);
+      });
+    });
+
+    describe('handlePaymentSuccessful', () => {
+      const payment: PaymentDTO = {
+        orderId: 'testID',
+        totalPrice: 1,
+        phoneNumber: 'test',
+      };
+
+      beforeEach(async () => {
+        ordersService.handlePaymentSuccessful.mockResolvedValue();
+        await ordersController.handlePaymentSuccessful(payment, context);
+      });
+
+      it('should call ordersService', async () => {
+        expect(ordersService.handlePaymentSuccessful).toHaveBeenCalledWith(
+          'testID',
+          OrderStatus.PAID,
+          context,
+        );
+        expect(ordersService.handlePaymentSuccessful).toHaveBeenCalledTimes(1);
+      });
+
+      it('should propagate error if ordersService throws an error', async () => {
+        ordersService.handlePaymentSuccessful.mockRejectedValue(new Error());
+
+        await expect(
+          ordersController.handlePaymentSuccessful(payment, context),
+        ).rejects.toThrow(Error);
+      });
+    });
+
+    describe('handleShippingProcessing', () => {
+      const orderId = 'testID';
+
+      beforeEach(async () => {
+        ordersService.handleShippingProcessing.mockResolvedValue();
+        await ordersController.handleShippingProcessing(orderId, context);
+      });
+
+      it('should call ordersService', async () => {
+        expect(ordersService.handleShippingProcessing).toHaveBeenCalledWith(
+          'testID',
+          OrderStatus.PROCESSING,
+          context,
+        );
+        expect(ordersService.handleShippingProcessing).toHaveBeenCalledTimes(1);
+      });
+
+      it('should propagate error if ordersService throws an error', async () => {
+        ordersService.handleShippingProcessing.mockRejectedValue(new Error());
+
+        await expect(
+          ordersController.handleShippingProcessing(orderId, context),
+        ).rejects.toThrow(Error);
+      });
+    });
+
+    describe('handleOrderShipped', () => {
+      const orderId = 'testID';
+
+      beforeEach(async () => {
+        ordersService.handleOrderShipped.mockResolvedValue();
+        await ordersController.handleOrderShipped(orderId, context);
+      });
+
+      it('should call ordersService', async () => {
+        expect(ordersService.handleOrderShipped).toHaveBeenCalledWith(
+          'testID',
+          OrderStatus.SHIPPED,
+          context,
+        );
+        expect(ordersService.handleOrderShipped).toHaveBeenCalledTimes(1);
+      });
+
+      it('should propagate error if ordersService throws an error', async () => {
+        ordersService.handleOrderShipped.mockRejectedValue(new Error());
+
+        await expect(
+          ordersController.handleOrderShipped(orderId, context),
+        ).rejects.toThrow(Error);
+      });
+    });
+
+    describe('handleOrderDelivered', () => {
+      const orderId = 'testID';
+
+      beforeEach(async () => {
+        ordersService.handleOrderDelivered.mockResolvedValue();
+        await ordersController.handleOrderDelivered(orderId, context);
+      });
+
+      it('should call ordersService', async () => {
+        expect(ordersService.handleOrderDelivered).toHaveBeenCalledWith(
+          'testID',
+          OrderStatus.DELIVERED,
+          context,
+        );
+        expect(ordersService.handleOrderDelivered).toHaveBeenCalledTimes(1);
+      });
+
+      it('should propagate error if ordersService throws an error', async () => {
+        ordersService.handleOrderDelivered.mockRejectedValue(new Error());
+
+        await expect(
+          ordersController.handleOrderDelivered(orderId, context),
+        ).rejects.toThrow(Error);
+      });
     });
   });
 });

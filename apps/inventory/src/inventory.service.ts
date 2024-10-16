@@ -9,6 +9,7 @@ import {
 } from './dto/add-product.dto';
 import { RmqService } from '@app/common';
 import { RmqContext } from '@nestjs/microservices';
+import { Reservation } from './schemas/reservation.schema';
 
 @Injectable()
 export class InventoryService {
@@ -21,6 +22,15 @@ export class InventoryService {
     // @Inject(ORDERS_SERVICE) private readonly ordersClient: ClientProxy,
   ) {}
 
+  private convertReservationToDTO(order: Reservation): ReservationDTO {
+    return {
+      _id: String(order._id),
+      orderId: order.orderId,
+      quantity: order.quantity,
+      expiresAt: order.expiresAt,
+    };
+  }
+
   async addProducts(products: AddProductDTO): Promise<ProductDTO> {
     return this.productRepository.createAndPopulate(products);
   }
@@ -30,7 +40,8 @@ export class InventoryService {
   }
 
   async getReservations(): Promise<ReservationDTO[]> {
-    return this.reservationRepository.find({});
+    const reservations = await this.reservationRepository.find({});
+    return reservations.map(this.convertReservationToDTO);
   }
 
   async reserveItems(
@@ -53,11 +64,6 @@ export class InventoryService {
             `Insufficient quantity of product with sku ${item.sku}`,
           );
         }
-
-        // if (product.reservations.length > 0) {
-        //   this.logger.log(`Product with sku ${item.sku} is already reserved`);
-        //   return;
-        // }
 
         const reservation = await this.reservationRepository.create({
           orderId: createdOrder._id,

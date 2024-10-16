@@ -4,6 +4,10 @@ import { IsDate, IsNumber, IsString } from 'class-validator';
 export class ReservationDTO {
   @ApiProperty()
   @IsString()
+  _id: string;
+
+  @ApiProperty()
+  @IsString()
   orderId: string;
 
   @ApiProperty()

@@ -114,3 +114,14 @@ To stop all containers, run:
 ```bash
 docker-compose down
 ```
+
+## Testing
+
+Uses Jest to test components.
+
+### Running Tests
+
+To run unit tests:
+```bash
+npm test
+```

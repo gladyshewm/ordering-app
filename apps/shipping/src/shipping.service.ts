@@ -6,6 +6,7 @@ import { ClientProxy, RmqContext } from '@nestjs/microservices';
 import { PaidOrderDTO } from './dto/paid-order.dto';
 import { ShippingRepository } from './shipping.repository';
 import { ShipmentDTO } from './dto/shipment.dto';
+import { Shipment } from './schemas/shipment.schema';
 
 @Injectable()
 export class ShippingService {
@@ -17,16 +18,25 @@ export class ShippingService {
     @Inject(ORDERS_SERVICE) private readonly ordersClient: ClientProxy,
   ) {}
 
-  async getShipments(): Promise<ShipmentDTO[]> {
-    const shipments = await this.shippingRepository.find({});
-    return shipments.map((shipment) => ({
+  private convertShipmentToDTO(shipment: Shipment): ShipmentDTO {
+    return {
       _id: String(shipment._id),
       orderId: shipment.orderId,
       address: shipment.address,
       trackingNumber: shipment.trackingNumber,
       estimatedDeliveryDate: shipment.estimatedDeliveryDate,
       actualDeliveryDate: shipment.actualDeliveryDate,
-    }));
+    };
+  }
+
+  async getShipments(): Promise<ShipmentDTO[]> {
+    try {
+      const shipments = await this.shippingRepository.find({});
+      return shipments.map((shipment) => this.convertShipmentToDTO(shipment));
+    } catch (error) {
+      this.logger.error('Failed to get shipments', error);
+      throw new Error('Failed to get shipments');
+    }
   }
 
   async ship(order: PaidOrderDTO, context: RmqContext) {
@@ -39,11 +49,16 @@ export class ShippingService {
         address: order.address,
       });
 
+      if (!shipment) {
+        throw new Error('Failed to create shipment');
+      }
+
       // Имитация подготовки заказа
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       shipment.trackingNumber = this.generateTrackingNumber();
       shipment.estimatedDeliveryDate = this.calculateEstimatedDeliveryDate();
+      // await shipment.save();
       await this.shippingRepository.upsert(
         { orderId: shipment.orderId },
         shipment,
@@ -70,7 +85,7 @@ export class ShippingService {
     return date;
   }
 
-  async processShipping(orderId: string) {
+  async processShipping(orderId: string): Promise<void> {
     try {
       await lastValueFrom(
         this.ordersClient.emit('shipping_processing', orderId),
@@ -78,15 +93,17 @@ export class ShippingService {
       this.logger.log('Successfully emitted shipping_processing event');
     } catch (error) {
       this.logger.error('Failed to emit shipping_processing event', error);
+      throw new Error('Failed to process shipping');
     }
   }
 
-  async shipped(orderId: string) {
+  async shipped(orderId: string): Promise<void> {
     try {
       await lastValueFrom(this.ordersClient.emit('order_shipped', orderId));
       this.logger.log('Successfully emitted order_shipped event');
     } catch (error) {
       this.logger.error('Failed to emit order_shipped event', error);
+      throw new Error('Failed to ship order');
     }
   }
 
@@ -114,12 +131,13 @@ export class ShippingService {
     }
   }
 
-  async cancelShipping(orderId: string) {
+  async cancelShipping(orderId: string): Promise<void> {
     try {
       await lastValueFrom(this.ordersClient.emit('shipping_failed', orderId));
       this.logger.log('Successfully emitted shipping_failed event');
     } catch (error) {
       this.logger.error('Failed to emit shipping_failed event', error);
+      throw new Error('Failed to cancel shipping');
     }
   }
 }

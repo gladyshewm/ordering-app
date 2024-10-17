@@ -6,6 +6,7 @@ import { ClientProxy, RmqContext } from '@nestjs/microservices';
 import { BillingRepository } from './billing.repository';
 import { PaymentDTO } from './dto/payment.dto';
 import { BillingDTO, PaymentStatus } from './dto/billing.dto';
+import { Payment } from './schemas/payment.schema';
 
 @Injectable()
 export class BillingService {
@@ -17,31 +18,28 @@ export class BillingService {
     @Inject(ORDERS_SERVICE) private readonly ordersClient: ClientProxy,
   ) {}
 
+  private convertPaymentToDTO(payment: Payment): BillingDTO {
+    return {
+      _id: String(payment._id),
+      orderId: payment.orderId,
+      amount: payment.amount,
+      status: payment.status as PaymentStatus,
+      createdAt: payment.createdAt,
+      processedAt: payment.processedAt,
+    };
+  }
+
   async getPayments(): Promise<BillingDTO[]> {
     const billings = await this.billingRepository.find({});
-    return billings.map((billing) => ({
-      _id: String(billing._id),
-      orderId: billing.orderId,
-      amount: billing.amount,
-      status: billing.status as PaymentStatus,
-      createdAt: billing.createdAt,
-      processedAt: billing.processedAt,
-    }));
+    return billings.map((billing) => this.convertPaymentToDTO(billing));
   }
 
   async getPaymentsByOrderId(orderId: string): Promise<BillingDTO[]> {
     const billings = await this.billingRepository.find({ orderId });
-    return billings.map((billing) => ({
-      _id: String(billing._id),
-      orderId: billing.orderId,
-      amount: billing.amount,
-      status: billing.status as PaymentStatus,
-      createdAt: billing.createdAt,
-      processedAt: billing.processedAt,
-    }));
+    return billings.map((billing) => this.convertPaymentToDTO(billing));
   }
 
-  async bill(paymentDetails: PaymentDTO, context: RmqContext) {
+  async bill(paymentDetails: PaymentDTO, context: RmqContext): Promise<void> {
     try {
       this.logger.log(`Billing for order ${paymentDetails.orderId}...`);
 
@@ -49,6 +47,10 @@ export class BillingService {
         orderId: paymentDetails.orderId,
         amount: paymentDetails.totalPrice,
       });
+
+      if (!payment) {
+        throw new Error('Failed to create payment');
+      }
 
       const isPaymentSuccessful = await this.verifyPayment(paymentDetails);
 
@@ -80,7 +82,7 @@ export class BillingService {
     return Math.random() > 0.1;
   }
 
-  async refundPayment(orderId: string) {
+  async refundPayment(orderId: string): Promise<void> {
     try {
       const payment = await this.billingRepository.findOne({
         orderId,
@@ -108,7 +110,7 @@ export class BillingService {
     }
   }
 
-  async confirmPayment(payment: PaymentDTO) {
+  async confirmPayment(payment: PaymentDTO): Promise<void> {
     try {
       await lastValueFrom(
         this.ordersClient.emit('payment_successful', payment),
@@ -116,15 +118,17 @@ export class BillingService {
       this.logger.log('Successfully emitted payment_successful event');
     } catch (error) {
       this.logger.error('Failed to emit payment_successful event', error);
+      throw new Error('Failed to confirm payment');
     }
   }
 
-  async cancelPayment(payment: PaymentDTO) {
+  async cancelPayment(payment: PaymentDTO): Promise<void> {
     try {
       await lastValueFrom(this.ordersClient.emit('payment_failed', payment));
       this.logger.log('Successfully emitted payment_failed event');
     } catch (error) {
       this.logger.error('Failed to emit payment_failed event', error);
+      throw new Error('Failed to cancel payment');
     }
   }
 }

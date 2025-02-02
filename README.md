@@ -29,7 +29,7 @@ Ensure you have the following installed:
 ### Setup and Running the Application
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/ordering-app.git
+   git clone https://github.com/gladyshewm/ordering-app.git
    cd ordering-app
    ```
 
